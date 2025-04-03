@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+<body>
+    <header>
+        <h1>国立国会図書館API 動作確認</h1>
+    </header>
+    <main>
+        <h2>タイトル検索</h2>
+        <label for="BOOKTITLE"></label>
+        <input type="text" name="BOOKTITLE" id="BOOKTITLE"><br>
+        <button type="button" id="serch_BOOKTITLE">タイトルを検索</button>
+        <br>
+        <h2>ISBN検索</h2>
+        <label for="ISBN"></label>
+        <input type="text" name="ISBN" id="ISBN"><br>
+        <button type="button" id="serch_ISBN">ISBNを検索</button>
+        <br>
+        <h2>検索結果</h2>
+        <p id="NumberOfResults"></p>
+        <p id="output" ></p>
+    </main>
+    <footer>
+        <h2>Create by tomate_t</h2>
+    </footer>
+    <script>        
+        document.getElementById("serch_BOOKTITLE").addEventListener('click', () => {
+            serchBookInfo("title",document.getElementById("BOOKTITLE").value);
+        });
+        document.getElementById("serch_ISBN").addEventListener('click', () => {
+            serchBookInfo("isbn",document.getElementById("ISBN").value.replaceAll("-",""));
+        });
+
+        async function serchBookInfo(serchType,searchKey){            
+            //クエリの作成
+            const resXML = await fetch(getSerchURL(serchType,searchKey)).then(x => x.text());
+            if(!resXML) return;
+            const XMLObject = getXMLObject(resXML);
+            if(!XMLObject) return;
+            
+            let records = XMLObject.getElementsByTagName("item");
+            document.getElementById("NumberOfResults").innerHTML = "検索結果：".concat(records.length,"件"," ※最大取得件数は200件です");;
+            //出力先の初期化
+            document.getElementById("output").innerHTML = "";
+
+            for(let i = 0; i < records.length; i++){
+                //ISBNの取得
+                const Identifiers = records[i].getElementsByTagName("dc:identifier");
+                let ISBN = null;
+                for(let j = 0; j < Identifiers.length; j++){
+                    let type = Identifiers[j].getAttribute("xsi:type");
+                    let IdentifierNumber = Identifiers[j].textContent.replaceAll("-","");
+                    if(type == "dcndl:ISBN" && IdentifierNumber.length == 13){
+                        ISBN = IdentifierNumber;
+                        break;
+                    }
+                }
+                //ISBNが無い場合書影を取得できないので次の要素へ
+                if(!ISBN) continue;
+                //タイトルの取得
+                const BookTitle = records[i].getElementsByTagName("dc:title")[0].textContent;
+                moldHTML(document.getElementById("output"),BookTitle,ISBN);
+            }
+        }
+        
+        function getSerchURL(serchType,searchKey){
+            //表示件数
+            const SourceURL = "https://ndlsearch.ndl.go.jp/api/opensearch?";
+            const fetchURL = SourceURL.concat(serchType,"=",encodeURIComponent(searchKey));
+            return fetchURL;
+        }
+        function getBookThumbnail(IdentifierNumber){
+            const SourceURL = "https://ndlsearch.ndl.go.jp/thumbnail/";
+            return SourceURL.concat(IdentifierNumber,".jpg");
+        }
+
+        function getXMLObject(XMLData){
+            let dom_parser = new DOMParser();
+            let result_XML = null;
+            try{
+                result_XML = dom_parser.parseFromString(XMLData,"text/xml");
+                if(result_XML.getElementsByTagName("parsererror").length){
+		            result_XML = null;
+	            }
+                return result_XML;
+            }catch(e){
+                console.log(e);
+            }
+        }
+
+        function moldHTML(parent,BOOKTITLE,ISBN){
+            const BookImageTag = document.createElement("img");
+            BookImageTag.onerror = () => {
+                BookImageTag.src="./Img/NoImage.jpg";
+                BookImageTag.alt="画像なし";
+            }
+            BookImageTag.src = getBookThumbnail(ISBN);
+            BookImageTag.alt="画像あり";
+            parent.appendChild(BookImageTag);
+
+            const BookTitleTag = document.createElement("div");
+            BookTitleTag.appendChild(document.createTextNode("タイトル："+BOOKTITLE));
+            parent.appendChild(BookTitleTag);
+        }
+
+
+    </script>
+</body>
+</html>
